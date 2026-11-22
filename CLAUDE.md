@@ -16,6 +16,7 @@ Inspired by an old Flash game called "Orbit" (launch a comet, survive the timer)
 - **Pass:** survive `TARGET` seconds. Shows "PASS", and you tap for the next level. The moon keeps flying behind the overlay.
 - **Timer:** a large, faint countdown number in the centre background (the ✓ on pass). In the last 5 seconds the background and the number pulse on each tick, harder as it nears 0.
 - **Levels:** each has a launch zone, so you can't just park next to one planet. 1–6 are hand-made layouts in `LAYOUTS` (planets + zone) (1 planet, then 2, 2 equal, a triangle of 3, centre + 2 small, a square of 4). From level 7 they're randomly generated with spacing checks, and the planet count grows up to 6.
+- **Zoom/pan:** pinch (two fingers) or mouse wheel zooms 1×–5× around the fingers/cursor; at >1× a one-finger drag outside the launch zone (or any time while flying) pans. A second finger cancels an aim in progress. View resets on a new level. Zoom is view-only: the off-screen fail boundary stays the unzoomed screen (`offScreen()` uses base `S`), and the launch drag is measured in world units, so zoomed-in drags are finer.
 - The HUD shows only the level number. The current level is saved in `localStorage` (`orbit.level`) when you advance, so a reload resumes there. A "↺ restart" button in the HUD (with confirm) resets to level 1.
 
 ## Key constants (top of the script)
