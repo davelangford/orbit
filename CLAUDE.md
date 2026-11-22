@@ -8,15 +8,15 @@ Inspired by an old Flash game called "Orbit" (launch a comet, survive the timer)
 
 ## How it plays
 
-- Press anywhere in empty space, drag back slingshot-style, and release to launch. The press point is where the moon starts. Velocity = (press − release) × `LAUNCH_K`, capped at `MAX_V`.
+- Press inside the level's launch zone (dashed blue circle; presses within ~24px snap to its edge), drag back slingshot-style, and release to launch. The press point is where the moon starts. Velocity = (press − release) × `LAUNCH_K`, capped at `MAX_V`.
 - While aiming, a dotted trajectory preview shows the next `PREVIEW_T` seconds of sim time. It stops where the path hits a planet or leaves the screen.
 - A cancel spot (✕, bottom-centre, about 70px up to clear phone gesture bars) appears while you drag. Releasing on it cancels the launch.
 - After a failed attempt, the previous launch's press point (solid dot), release point (hollow ring) and the line between them show as a faint orange ghost guide. The ghost clears on a new level.
 - **Fail:** the moon hits a planet ("Crashed into a planet") or fully leaves the visible screen ("Flew off the screen"). After about 1.3s you're back aiming at the same level, with unlimited retries.
 - **Pass:** survive `TARGET` seconds. Shows "PASS", and you tap for the next level. The moon keeps flying behind the overlay.
 - **Timer:** a large, faint countdown number in the centre background (the ✓ on pass). In the last 5 seconds the background and the number pulse on each tick, harder as it nears 0.
-- **Levels:** 1–6 are hand-made layouts in `LAYOUTS` (1 planet, then 2, 2 equal, a triangle of 3, centre + 2 small, a square of 4). From level 7 they're randomly generated with spacing checks, and the planet count grows up to 6.
-- The HUD shows only the level number. Progress isn't saved, so a reload starts at level 1.
+- **Levels:** each has a launch zone, so you can't just park next to one planet. 1–6 are hand-made layouts in `LAYOUTS` (planets + zone) (1 planet, then 2, 2 equal, a triangle of 3, centre + 2 small, a square of 4). From level 7 they're randomly generated with spacing checks, and the planet count grows up to 6.
+- The HUD shows only the level number. The current level is saved in `localStorage` (`orbit.level`) when you advance, so a reload resumes there. A "↺ restart" button in the HUD (with confirm) resets to level 1.
 
 ## Key constants (top of the script)
 
