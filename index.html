@@ -35,10 +35,28 @@ function resize() {
   cv.width = W * dpr; cv.height = H * dpr;
   cv.style.width = W + 'px'; cv.style.height = H + 'px';
   S = Math.min(W, H) / 1000;
+  clampView();
 }
+// camera: pinch / wheel zoom (1x..5x) and pan. Only affects drawing and input;
+// the off-screen fail boundary is always the unzoomed screen.
+let zoom = 1, camX = 0, camY = 0;
+const ZMAX = 5;
+const toScreen = (x, y) => [W / 2 + (x - camX) * S * zoom, H / 2 + (y - camY) * S * zoom];
+const toWorld = (sx, sy) => [(sx - W / 2) / (S * zoom) + camX, (sy - H / 2) / (S * zoom) + camY];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function clampView() {
+  zoom = clamp(zoom, 1, ZMAX);
+  const hw = W / 2 / S * (1 - 1 / zoom), hh = H / 2 / S * (1 - 1 / zoom);
+  camX = clamp(camX, -hw, hw); camY = clamp(camY, -hh, hh);
+}
+function zoomAt(sx, sy, f) {
+  const [wx, wy] = toWorld(sx, sy);
+  zoom = clamp(zoom * f, 1, ZMAX);
+  camX = wx - (sx - W / 2) / (S * zoom); camY = wy - (sy - H / 2) / (S * zoom);
+  clampView();
+}
+function resetView() { zoom = 1; camX = 0; camY = 0; }
 addEventListener('resize', resize); resize();
-const toScreen = (x, y) => [W / 2 + x * S, H / 2 + y * S];
-const toWorld = (sx, sy) => [(sx - W / 2) / S, (sy - H / 2) / S];
 
 const stars = Array.from({ length: 200 }, () => ({
   x: Math.random(), y: Math.random(), r: Math.random() * 1.1 + 0.2, a: Math.random() * 0.5 + 0.15, tw: Math.random() * 6
@@ -99,7 +117,7 @@ function accel(x, y) {
   return [ax, ay];
 }
 function offScreen(x, y) {
-  const [sx, sy] = toScreen(x, y), r = Math.max(MOON_R * S, 3);
+  const sx = W / 2 + x * S, sy = H / 2 + y * S, r = Math.max(MOON_R * S, 3);   // unzoomed view
   return sx < -r || sy < -r || sx > W + r || sy > H + r;
 }
 function hitPlanet(x, y, pad = MOON_R) {
@@ -124,13 +142,13 @@ function title() {
 }
 function nextLevel() {
   level++; planets = makeLevel(level); saveLevel(level);
-  lastLaunch = null; moon = null; trail = []; t = 0; particles = [];
+  lastLaunch = null; moon = null; trail = []; t = 0; particles = []; resetView();
   state = 'aim'; showMsg('');
 }
 document.getElementById('reset').addEventListener('click', () => {
   if (level === 1 || !confirm('Start again from level 1?')) return;
   level = 1; planets = makeLevel(1); saveLevel(1);
-  lastLaunch = null; moon = null; drag = null; trail = []; t = 0; particles = [];
+  lastLaunch = null; moon = null; drag = null; trail = []; t = 0; particles = []; resetView();
   state = 'title'; title();
 });
 function boom(x, y, hue) {
@@ -146,20 +164,43 @@ function loseMoon(text) {
 
 // ---------- input ----------
 function pt(e) { return toWorld(e.clientX, e.clientY); }
+const ptrs = new Map();   // active pointers (screen coords)
+let pinch = null, pan = null;
+function pinchInfo() {
+  const [a, b] = [...ptrs.values()];
+  return { mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, d: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)) };
+}
 cv.addEventListener('pointerdown', e => {
+  ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  cv.setPointerCapture(e.pointerId);
+  if (ptrs.size === 2) { drag = null; pan = null; pinch = pinchInfo(); return; }   // second finger: pinch, cancels any aim
+  if (ptrs.size > 2) return;
   if (state === 'title') { state = 'aim'; showMsg(''); return; }
   if (state === 'cleared') { nextLevel(); return; }
-  if (state !== 'aim') return;
+  const startPan = () => { if (zoom > 1) pan = { x: e.clientX, y: e.clientY }; };
+  if (state !== 'aim') { startPan(); return; }
   let [x, y] = pt(e);
   // must start in the launch zone; a near miss (within ~24px) snaps to its edge
   const zd = Math.hypot(x - zone.x, y - zone.y);
-  if (zd > zone.r + 24 / S) { zoneFlash = 0.5; return; }
+  if (zd > zone.r + 24 / (S * zoom)) { if (zoom > 1) startPan(); else zoneFlash = 0.5; return; }
   if (zd > zone.r) { x = zone.x + (x - zone.x) * zone.r / zd; y = zone.y + (y - zone.y) * zone.r / zd; }
   if (hitPlanet(x, y, MOON_R + 4)) return;
   drag = { x, y, cx: x, cy: y, sx: e.clientX, sy: e.clientY };
-  cv.setPointerCapture(e.pointerId);
 });
 cv.addEventListener('pointermove', e => {
+  const p = ptrs.get(e.pointerId);
+  if (!p) return;
+  p.x = e.clientX; p.y = e.clientY;
+  if (pinch && ptrs.size >= 2) {
+    const n = pinchInfo();
+    camX -= (n.mx - pinch.mx) / (S * zoom); camY -= (n.my - pinch.my) / (S * zoom);
+    zoomAt(n.mx, n.my, n.d / pinch.d);
+    pinch = n; return;
+  }
+  if (pan) {
+    camX -= (e.clientX - pan.x) / (S * zoom); camY -= (e.clientY - pan.y) / (S * zoom);
+    clampView(); pan.x = e.clientX; pan.y = e.clientY; return;
+  }
   if (!drag) return;
   [drag.cx, drag.cy] = pt(e); drag.sx = e.clientX; drag.sy = e.clientY;
 });
@@ -184,8 +225,14 @@ function endDrag() {
   }
   drag = null;
 }
-cv.addEventListener('pointerup', endDrag);
-cv.addEventListener('pointercancel', () => { drag = null; });
+function pointerEnd(e) {
+  ptrs.delete(e.pointerId);
+  if (ptrs.size < 2) pinch = null;
+  if (ptrs.size === 0) pan = null;
+}
+cv.addEventListener('pointerup', e => { pointerEnd(e); endDrag(); });
+cv.addEventListener('pointercancel', e => { pointerEnd(e); drag = null; });
+cv.addEventListener('wheel', e => { e.preventDefault(); zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
 cv.addEventListener('contextmenu', e => e.preventDefault());
 document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
 
@@ -286,7 +333,7 @@ function draw() {
 
   // planets
   for (const p of planets) {
-    const [sx, sy] = toScreen(p.x, p.y), r = p.r * S;
+    const [sx, sy] = toScreen(p.x, p.y), r = p.r * S * zoom;
     const halo = ctx.createRadialGradient(sx, sy, r, sx, sy, r * 3.2);
     halo.addColorStop(0, `hsla(${p.hue},70%,60%,0.14)`); halo.addColorStop(1, `hsla(${p.hue},70%,60%,0)`);
     ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(sx, sy, r * 3.2, 0, 7); ctx.fill();
@@ -297,7 +344,7 @@ function draw() {
 
   // launch zone
   if (state === 'aim' || state === 'crashed') {
-    const [zx, zy] = toScreen(zone.x, zone.y), zr = zone.r * S, f = zoneFlash / 0.5;
+    const [zx, zy] = toScreen(zone.x, zone.y), zr = zone.r * S * zoom, f = zoneFlash / 0.5;
     const breathe = drag ? 0 : 0.5 + 0.5 * Math.sin(clock * 3);
     ctx.fillStyle = `rgba(127,209,255,${0.05 + 0.03 * breathe + 0.12 * f})`;
     ctx.strokeStyle = `rgba(127,209,255,${0.35 + 0.2 * breathe + 0.45 * f})`;
@@ -310,7 +357,7 @@ function draw() {
   for (let i = 1; i < trail.length; i++) {
     const [ax, ay] = toScreen(...trail[i - 1]), [bx, by] = toScreen(...trail[i]);
     ctx.strokeStyle = `rgba(200,225,255,${(i / trail.length) * 0.55})`;
-    ctx.lineWidth = Math.max(1, 2.2 * S * (i / trail.length) * 1.4);
+    ctx.lineWidth = Math.max(1, 2.2 * S * zoom * (i / trail.length) * 1.4);
     ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
   }
 
@@ -382,7 +429,7 @@ function draw() {
 }
 
 function drawMoon(x, y) {
-  const [sx, sy] = toScreen(x, y), r = Math.max(MOON_R * S, 3);
+  const [sx, sy] = toScreen(x, y), r = Math.max(MOON_R * S * zoom, 3);
   const g = ctx.createRadialGradient(sx - r * 0.4, sy - r * 0.4, r * 0.1, sx, sy, r);
   g.addColorStop(0, '#fbf8ee'); g.addColorStop(1, '#8d8a80');
   ctx.fillStyle = g; ctx.beginPath(); ctx.arc(sx, sy, r, 0, 7); ctx.fill();
