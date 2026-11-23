@@ -59,10 +59,10 @@ const HUES = [205, 25, 145, 280, 48, 340];
 const LAYOUTS = [
   { ps: [[0, 0, 55]], zone: [-300, 0, 110] },
   { ps: [[-60, 0, 60], [235, 0, 18]], zone: [0, -330, 90] },
-  { ps: [[-190, 0, 45], [190, 0, 45]], zone: [0, 320, 70] },
-  { ps: [[0, -170, 40], [-150, 110, 40], [150, 110, 40]], zone: [0, 20, 45] },
-  { ps: [[0, 0, 50], [-290, -200, 24], [290, 200, 24]], zone: [-330, 260, 60] },
-  { ps: [[-170, -170, 32], [170, -170, 32], [-170, 170, 32], [170, 170, 32]], zone: [0, 0, 50] },
+  { ps: [[-190, 0, 45], [190, 0, 45]], zone: [0, 300, 110] },
+  { ps: [[0, -170, 40], [-150, 110, 40], [150, 110, 40]], zone: [0, 330, 100] },
+  { ps: [[0, 0, 50], [-290, -200, 24], [290, 200, 24]], zone: [-300, 250, 100] },
+  { ps: [[-170, -170, 32], [170, -170, 32], [-170, 170, 32], [170, 170, 32]], zone: [0, 340, 90] },
 ];
 
 function makeLevel(n) {
@@ -77,10 +77,12 @@ function makeLevel(n) {
       if (ps.every(p => Math.hypot(p[0] - x, p[1] - y) > p[2] + r + 100)) ps.push([x, y, r]);
     }
     // launch zone: shrinks with level, kept clear of planets and inside the visible area on any screen
-    const zr = Math.max(40, 80 - (n - LAYOUTS.length - 1) * 3);
+    // big and out near the edge early on; small and allowed anywhere (e.g. between planets) from ~level 20
+    const zr = Math.max(40, 100 - (n - LAYOUTS.length - 1) * 4);
+    const minD = n < 20 ? 250 : 0;
     for (let i = 0; i < 800 && !z; i++) {
       const x = (Math.random() * 2 - 1) * (400 - zr), y = (Math.random() * 2 - 1) * (400 - zr);
-      if (ps.every(p => Math.hypot(p[0] - x, p[1] - y) > p[2] + zr + 50)) z = [x, y, zr];
+      if (Math.hypot(x, y) > minD && ps.every(p => Math.hypot(p[0] - x, p[1] - y) > p[2] + zr + 50)) z = [x, y, zr];
     }
     if (!z) z = [0, 400 - zr, zr];
   }
